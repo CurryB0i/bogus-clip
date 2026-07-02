@@ -1,0 +1,11 @@
+**/node_modules
+**/.env
+server/bogus-clip
+server/bogus-clip-linux
+server/.python-version
+server/pyrightconfig.json
+server/__pycache__
+server/audios
+server/videos
+server/transcripts
+server/waveforms
