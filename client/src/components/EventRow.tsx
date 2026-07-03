@@ -21,24 +21,18 @@ type DataProps = {
 const EventRow = ({
   index,
   style,
-  data,
-}: RowComponentProps<{
-  data: DataProps;
-}>) => {
-  const {
-    canonical,
-    focusedEvent,
-    focusedEventRef,
-    getWord,
-    updateWord,
-    handleEventClick,
-    handleEventDoubleClick,
-    handleAddEvent,
-    handleDeleteEvent,
-    setFocusedEvent,
-    handleBlur
-  } = data;
-
+  canonical,
+  focusedEvent,
+  focusedEventRef,
+  getWord,
+  updateWord,
+  handleEventClick,
+  handleEventDoubleClick,
+  handleAddEvent,
+  handleDeleteEvent,
+  setFocusedEvent,
+  handleBlur
+}: RowComponentProps<DataProps>) => {
   const eventId  = canonical.eventOrder[index];
   const event    = canonical.events[eventId];
 
@@ -47,7 +41,7 @@ const EventRow = ({
   const rowRef = useRef<HTMLDivElement>(null);
   const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
-  const handleMouseOver = (e: MouseEvent, wid: number) => {
+  const handleMouseOver = (_e: MouseEvent, wid: number) => {
     const el = inputRefs.current[wid];
     const row = rowRef.current;
     if (!el || !row) return;

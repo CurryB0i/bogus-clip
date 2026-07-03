@@ -16,7 +16,7 @@ import aiofiles
 import uuid
 import ffmpeg
 import json
-import numpy as p
+import numpy as np
 import librosa
 from fontTools.ttLib import TTFont
 import platform
@@ -333,3 +333,170 @@ async def serve_font(font_name: str):
     filename=path.name, 
     media_type="font/ttf"
   )
+
+class ASSExportRequest(BaseModel):
+  filename: str
+  styles: dict
+  events: list
+  position: dict = {}
+
+BURN_DIR = Path("burned")
+BURN_DIR.mkdir(exist_ok=True)
+
+def build_ass(filename: str, styles_data: dict, events_data: list, position: dict = {}):
+  from ass import ASS, ScriptInfo, Style, Event as ASSEvent, generateASSFileContent, SCRIPT_INFO, DEFAULT_STYLE, floatToASSTime, hexToASSColor
+
+  video = VIDEO_DIR / filename
+  if not video.exists():
+    raise HTTPException(status_code=404, detail="File does not exist.")
+
+  probe = ffmpeg.probe(str(video))
+  stream = next(
+    (s for s in probe["streams"] if s["codec_type"] == "video"),
+    None
+  )
+  resX = stream["width"] if stream else 1920
+  resY = stream["height"] if stream else 1080
+
+  script_info = ScriptInfo(
+    title=filename,
+    script=SCRIPT_INFO.script,
+    translation=SCRIPT_INFO.translation,
+    editing=SCRIPT_INFO.editing,
+    timing=SCRIPT_INFO.timing,
+    updated=SCRIPT_INFO.updated,
+    details=SCRIPT_INFO.details,
+    type=SCRIPT_INFO.type,
+    collissions=SCRIPT_INFO.collissions,
+    resX=resX,
+    resY=resY,
+    timer=SCRIPT_INFO.timer,
+    wrapStyle=SCRIPT_INFO.wrapStyle,
+    scaledBorderAndShadow=SCRIPT_INFO.scaledBorderAndShadow
+  )
+
+  ass_styles = []
+  for name, s in styles_data.items():
+    primary_color = s.get("primaryColor", "#ffffff")
+    secondary_color = s.get("secondaryColor", "#00ffff")
+    outline_color = s.get("outlineColor", "#000000")
+    bg_color = s.get("backgroundColor", "transparent")
+
+    bg_is_transparent = (
+      bg_color in ("transparent", "") or
+      (len(bg_color.lstrip("#")) == 8 and bg_color.lstrip("#")[6:8] == "00")
+    )
+
+    outline_val = s.get("outline", 2)
+    if outline_val > 0:
+      outline_val = max(1, round(outline_val / 2))
+
+    ass_styles.append(Style(
+      name=name,
+      fontName=s.get("font", "Arial"),
+      fontSize=s.get("size", 36),
+      primaryColor=hexToASSColor(primary_color) if primary_color not in ("transparent", "") else "&H00FFFFFF",
+      secondaryColor=hexToASSColor(secondary_color) if secondary_color not in ("transparent", "") else "&H0000FFFF",
+      outlineColor=hexToASSColor(outline_color) if outline_color not in ("transparent", "") else "&H00000000",
+      backgroundColor=hexToASSColor(bg_color) if not bg_is_transparent else "&H00000000",
+      bold=s.get("bold", False),
+      italic=s.get("italic", False),
+      underline=s.get("underline", False),
+      strikeOut=False,
+      scaleX=s.get("scaleX", 100),
+      scaleY=s.get("scaleY", 100),
+      spacing=0,
+      angle=0,
+      borderStyle=3 if not bg_is_transparent else 1,
+      outline=0 if not bg_is_transparent else outline_val,
+      shadow=0,
+      alignment=7,
+      marginL=10,
+      marginR=10,
+      marginV=10,
+      encoding="1"
+    ))
+
+  if not ass_styles:
+    ass_styles.append(DEFAULT_STYLE)
+
+  pos = None
+  if position and ("x" in position) and ("y" in position):
+    pos = (int(position["x"]), int(position["y"]))
+
+  ass_events = []
+  for ev in events_data:
+    style_name = ev.get("style", "Default")
+    style_obj = next((s for s in ass_styles if s.name == style_name), ass_styles[0])
+    ass_events.append(ASSEvent(
+      type="Dialogue",
+      layer=0,
+      start=ev.get("start", 0),
+      end=ev.get("end", 0),
+      style=style_obj,
+      name="",
+      marginL=0,
+      marginR=0,
+      marginV=0,
+      effect="",
+      text=ev.get("text", ""),
+      pos=pos
+    ))
+
+  ass = ASS(scriptInfo=script_info, styles=ass_styles, events=ass_events)
+  return generateASSFileContent(ass)
+
+@app.post("/export-ass")
+async def export_ass(req: ASSExportRequest):
+  content = build_ass(req.filename, req.styles, req.events, req.position)
+
+  from fastapi.responses import Response
+  return Response(
+    content=content,
+    media_type="text/plain",
+    headers={
+      "Content-Disposition": f"attachment; filename={Path(req.filename).stem}.ass"
+    }
+  )
+
+@app.post("/burn-subtitles")
+async def burn_subtitles(req: ASSExportRequest):
+  content = build_ass(req.filename, req.styles, req.events, req.position)
+
+  video = VIDEO_DIR / req.filename
+  if not video.exists():
+    raise HTTPException(status_code=404, detail="File does not exist.")
+
+  stem = Path(req.filename).stem
+  ass_path = BURN_DIR / f"{stem}.ass"
+  out_path = BURN_DIR / f"{stem}_burned.mp4"
+
+  with open(ass_path, "w", encoding="utf-8") as f:
+    f.write(content)
+
+  ass_filter_path = str(ass_path).replace("\\", "/").replace(":", "\\:")
+
+  try:
+    (
+      ffmpeg
+      .input(str(video))
+      .output(
+        str(out_path),
+        vf=f"subtitles='{ass_filter_path}'",
+        **{"c:v": "libx264", "c:a": "copy"}
+      )
+      .overwrite_output()
+      .run()
+    )
+  except ffmpeg.Error as e:
+    raise HTTPException(status_code=500, detail=f"ffmpeg error: {e.stderr.decode() if e.stderr else str(e)}")
+
+  return FileResponse(
+    str(out_path),
+    media_type="video/mp4",
+    filename=f"{stem}_burned.mp4"
+  )
+
+if __name__ == "__main__":
+  import uvicorn
+  uvicorn.run(app, host="0.0.0.0", port=8000)

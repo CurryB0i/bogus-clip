@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type StyleOptions } from "../types/transcript";
 import axios from "axios";
 import { useVideo } from "../context/VideoContext";
@@ -18,16 +18,20 @@ const INITIAL_STYLES: StyleOptions = {
 };
 
 const EditStyles = () => {
-  const API_URL = import.meta.env.VITE_API_URL;
   const { state, dispatch } = useVideo();
   const [fonts, setFonts]   = useState<string[]>([]);
+  const [filteredFonts, setFilteredFonts] = useState<string[]>([]);
+  const [fontSearch, setFontSearch] = useState("");
   const [style, setStyle]   = useState<StyleOptions>(() => {
     const s = localStorage.getItem("style");
     return s ? JSON.parse(s) : INITIAL_STYLES;
   });
+  const [history, setHistory] = useState<StyleOptions[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
   const [applied, setApplied]       = useState<boolean>(false);
   const [showXGuide, setShowXGuide] = useState<boolean>(false);
   const [showYGuide, setShowYGuide] = useState<boolean>(false);
+  const [videoDisplaySize, setVideoDisplaySize] = useState<{width: number, height: number}>({width: 0, height: 0});
   const [videoNaturalSize, setVideoNaturalSize] 
                                     = useState<{ width: number, height: number }>({ width: 0, height: 0 });
   const textRef         = useRef<HTMLDivElement>(null);
@@ -121,17 +125,52 @@ const EditStyles = () => {
   useEffect(() => {
     const getFonts = async () => {
       try {
-        const res = await axios.get(`${API_URL}/get-fonts`);
+        const res = await axios.get(`/get-fonts`);
         if(res.data.ok) {
           setFonts(res.data.fonts);
+          setFilteredFonts(res.data.fonts);
         }
-      } catch(err: any) {
+      } catch(err) {
         console.error(err);
       }
     }
 
     getFonts();
   }, []);
+
+  useEffect(() => {
+    if (fontSearch.trim() === "") {
+      setFilteredFonts(fonts);
+    } else {
+      setFilteredFonts(fonts.filter(f => f.toLowerCase().includes(fontSearch.toLowerCase())));
+    }
+  }, [fontSearch, fonts]);
+
+  const addToHistory = (newStyle: StyleOptions) => {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(newStyle);
+    if (newHistory.length > 20) newHistory.shift();
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setStyle(history[newIndex]);
+      localStorage.setItem('style', JSON.stringify(history[newIndex]));
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setStyle(history[newIndex]);
+      localStorage.setItem('style', JSON.stringify(history[newIndex]));
+    }
+  };
 
   useEffect(() => {
     const video = videoRef.current;
@@ -152,6 +191,37 @@ const EditStyles = () => {
 
     return () => video.removeEventListener('loadedmetadata', handleLoadedMetadata);
   }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const updateSize = () => {
+      const rect = video.getBoundingClientRect();
+      setVideoDisplaySize({ width: rect.width, height: rect.height });
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, []);
+
+  const displayPosition = useMemo(() => {
+    if (videoNaturalSize.width === 0 || videoDisplaySize.width === 0) 
+      return { x: 0, y: 0 };
+
+    const scaleX = videoDisplaySize.width / videoNaturalSize.width;
+    const scaleY = videoDisplaySize.height / videoNaturalSize.height;
+
+    const displayCenterX = style.position.x * scaleX;
+    const displayCenterY = style.position.y * scaleY;
+
+    return {
+      x: displayCenterX - (textRef.current?.offsetWidth || 0) / 2,
+      y: displayCenterY - (textRef.current?.offsetHeight || 0) / 2
+    };
+  }, [style.position, videoNaturalSize, videoDisplaySize, style.font, style.size]);
 
   const onMouseDown = (e: React.MouseEvent) => {
     const displayPos = assToDisplay(style.position.x, style.position.y);
@@ -203,7 +273,7 @@ const EditStyles = () => {
     const loadFont = async (fontName: string) => {
       const font = new FontFace( 
                     fontName, 
-                    `url(${API_URL}/font/${encodeURIComponent(fontName)})`
+                    `url(/font/${encodeURIComponent(fontName)})`
                    );
       await font.load();
       document.fonts.add(font);
@@ -231,10 +301,12 @@ const EditStyles = () => {
       value = raw;
     }
 
-    setStyle(prev => ({
-      ...prev!,
+    const newStyle = {
+      ...style!,
       [field] : value
-    }));
+    };
+    setStyle(newStyle);
+    addToHistory(newStyle);
   }
 
   const handleApply = () => {
@@ -243,11 +315,10 @@ const EditStyles = () => {
 
     dispatch({
       type: 'UPDATE_STYLES',
-      payoad: { style }
+      payload: { style }
     });
+    addToHistory(style);
     localStorage.setItem('style', JSON.stringify(style));
-    const s = localStorage.getItem('style');
-    if(s) setStyle(JSON.parse(s));
     setTimeout(() => setApplied(false), 1000)
   }
 
@@ -257,26 +328,58 @@ const EditStyles = () => {
   return (
     <div className="w-full h-full flex items-center justify-around">
       <div className="w-1/2 h-full flex flex-col items-center justify-center px-10 gap-5">
+        <div className="w-full flex items-center justify-between gap-2">
+          <button
+            onClick={handleUndo}
+            disabled={historyIndex <= 0}
+            className={`px-3 py-1 rounded font-bold transition-all
+              ${historyIndex > 0 
+                ? "bg-blue-500 text-white hover:bg-blue-600" 
+                : "bg-gray-700 text-gray-500 cursor-not-allowed"}`}
+            title="Undo (Ctrl+Z)"
+          >
+            Undo
+          </button>
+          <button
+            onClick={handleRedo}
+            disabled={historyIndex >= history.length - 1}
+            className={`px-3 py-1 rounded font-bold transition-all
+              ${historyIndex < history.length - 1
+                ? "bg-blue-500 text-white hover:bg-blue-600" 
+                : "bg-gray-700 text-gray-500 cursor-not-allowed"}`}
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            Redo
+          </button>
+        </div>
         <div className="w-full flex items-center justify-between">
           <label htmlFor="font">FONT:</label>
-          <select
-            name="font"
-            id="font"
-            value={style?.font}
-            defaultValue={fonts[0]}
-            onChange={(e) => updateStyle("font", e.target.value)}
-            className="w-2/3 text-center cursor-pointer"
-          >
-            {fonts.map((f) => (
-              <option 
-                key={f} 
-                value={f}
-                className="text-black cursor-pointer"
-              >
-                {f}
-              </option>
-            ))}
-          </select>
+          <div className="w-2/3 flex flex-col gap-1">
+            <input
+              type="text"
+              placeholder="Search fonts..."
+              value={fontSearch}
+              onChange={(e) => setFontSearch(e.target.value)}
+              className="bg-[#242424] p-1 text-center rounded text-sm"
+            />
+            <select
+              name="font"
+              id="font"
+              value={style?.font}
+              onChange={(e) => updateStyle("font", e.target.value)}
+              className="bg-[#242424] p-1 text-center cursor-pointer max-h-40 overflow-y-auto"
+            >
+              {filteredFonts.map((f) => (
+                <option 
+                  key={f} 
+                  value={f}
+                  className="text-black cursor-pointer"
+                >
+                  {f}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="w-full flex items-center justify-between gap-5">
@@ -492,7 +595,7 @@ const EditStyles = () => {
             <div className="w-1/2 relative">
               <video 
                 className="w-full mx-auto"
-                src={`${API_URL}/videos/${state.file?.name}`}
+                 src={`/videos/${state.file?.name}`}
                 ref={videoRef}
               />
               {videoNaturalSize.width > 0 && (
@@ -500,18 +603,21 @@ const EditStyles = () => {
                   <div
                     ref={textRef}
                     className="absolute cursor-move select-none top-0 left-0"
-                    style={{
-                      transform: `translate(
-                        ${assToDisplay(style.position.x, style.position.y).x}px,
-                        ${assToDisplay(style.position.x, style.position.y).y}px)
-                      `,
-                      fontFamily: style.font,
-                      fontSize: style.size,
-                      color: style.primaryColor,
-                      WebkitTextStrokeColor: style.outlineColor,
-                      WebkitTextStrokeWidth: style.outline,
-                      backgroundColor: style.backgroundColor,
-                    }}
+                  style={{
+                    transform: `translate(
+                      ${displayPosition.x}px,
+                      ${displayPosition.y}px)
+                    `,
+                    fontFamily: style.font,
+                    fontSize: style.size,
+                    color: style.primaryColor,
+                    WebkitTextStrokeColor: style.outlineColor,
+                    WebkitTextStrokeWidth: style.outline,
+                    backgroundColor: style.backgroundColor,
+                    fontWeight: style.bold ? 'bold' : 'normal',
+                    fontStyle: style.italic ? 'italic' : 'normal',
+                    textDecoration: style.underline ? 'underline' : 'none',
+                  }}
                     onMouseDown={onMouseDown}
                   >
                     HELLO, WORLD!

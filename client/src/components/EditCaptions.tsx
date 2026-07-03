@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import { useVideo } from "../context/VideoContext";
 import { List } from 'react-window';
 import EventRow from "./EventRow";
-import { type StyleOptions, type Transcript, type Event as TranscriptEvent } from "../types/transcript";
+import { type Transcript, type Event as TranscriptEvent } from "../types/transcript";
 import { addTranscriptToDB, getTranscriptFromDB } from "../utils/db";
 import { useNavigate } from "react-router-dom";
 
@@ -25,13 +25,14 @@ export type CanonicalState = {
 }
 
 const EditCaptions = () => {
-  const API_URL                         = import.meta.env.VITE_API_URL;
   const [canonical, setCanonical]       = useState<CanonicalState | null>(null);
   const [draftWords, setDraftWords]     = useState<Record<number, Partial<Word>>>({});
   const [focusedEvent, setFocusedEvent] = useState<Event | null>(null);
   const [activeEvent, setActiveEvent]   = useState<TranscriptEvent | null>(null);
   const [time, setTime]                 = useState<number>(0);
   const [updated, setUpdated]           = useState<boolean>(false);
+  const [videoDisplaySize, setVideoDisplaySize] = useState<{width: number, height: number}>({width: 0, height: 0});
+  const [videoNaturalSize, setVideoNaturalSize] = useState<{width: number, height: number}>({width: 0, height: 0});
   const videoRef                        = useRef<HTMLVideoElement>(null);
   const eventsRef                       = useRef<HTMLDivElement>(null);
   const focusedEventRef                 = useRef<HTMLDivElement>(null);
@@ -65,6 +66,28 @@ const EditCaptions = () => {
       setTime(video.currentTime);
     }
 
+    const handleLoadedMetadata = () => {
+      setVideoNaturalSize({
+        width: video.videoWidth,
+        height: video.videoHeight
+      });
+    };
+
+    const updateSize = () => {
+      const rect = video.getBoundingClientRect();
+      setVideoDisplaySize({ width: rect.width, height: rect.height });
+    };
+
+    if (video.readyState >= 1) {
+      handleLoadedMetadata();
+    } else {
+      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    }
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(video);
+
     window.addEventListener('keydown', handleKeyPress);
     video.addEventListener('timeupdate', updateTime);
     window.addEventListener('mousedown', handleMouseClick);
@@ -72,6 +95,8 @@ const EditCaptions = () => {
       window.removeEventListener('keydown', handleKeyPress);
       window.removeEventListener('mousedown', handleMouseClick)
       video.removeEventListener('timeupdate', updateTime);
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      observer.disconnect();
     }
   }, [videoRef.current]);
 
@@ -114,6 +139,19 @@ const EditCaptions = () => {
     const event = state.transcript.events.find(e => time >= e.start && time <= e.end) ?? null;
     setActiveEvent(event);
   }, [time, state.transcript]);
+
+  const assToDisplay = (assX: number, assY: number) => {
+    if (videoNaturalSize.width === 0 || videoDisplaySize.width === 0) 
+      return { x: 0, y: 0 };
+    
+    const scaleX = videoDisplaySize.width / videoNaturalSize.width;
+    const scaleY = videoDisplaySize.height / videoNaturalSize.height;
+    
+    return {
+      x: assX * scaleX,
+      y: assY * scaleY
+    };
+  };
 
 
   const getWord = useCallback(
@@ -420,20 +458,18 @@ const EditCaptions = () => {
                   scrollbarWidth: 'none',
                 }}
                 rowProps={{
-                  data: {
-                    canonical,
-                    focusedEvent,
-                    focusedEventRef,
-                    getWord,
-                    updateWord,
-                    handleEventClick,
-                    handleEventDoubleClick,
-                    handleAddEvent,
-                    handleDeleteEvent,
-                    setFocusedEvent,
-                    handleBlur
-                }
-              }}
+                  canonical,
+                  focusedEvent,
+                  focusedEventRef,
+                  getWord,
+                  updateWord,
+                  handleEventClick,
+                  handleEventDoubleClick,
+                  handleAddEvent,
+                  handleDeleteEvent,
+                  setFocusedEvent,
+                  handleBlur
+                }}
               />
             )}
           </div>
@@ -443,7 +479,7 @@ const EditCaptions = () => {
         >
           <video
             className="w-2/3 border-4 border-blue-500 rounded-2xl"
-            src={`${API_URL}/videos/${state.file!.name}`}
+            src={`/videos/${state.file!.name}`}
             ref={videoRef}
             controls
             loop
@@ -454,8 +490,8 @@ const EditCaptions = () => {
               <div
                 style={{
                   transform: `translate(
-                    ${state.style?.position.y}px,
-                    ${state.style?.position.x}px)
+                    ${assToDisplay(state.style.position.x, state.style.position.y).x}px,
+                    ${assToDisplay(state.style.position.x, state.style.position.y).y}px)
                   `,
                   fontFamily: state.style.font,
                   fontSize: state.style.size,
@@ -463,6 +499,9 @@ const EditCaptions = () => {
                   WebkitTextStrokeColor: state.style.outlineColor,
                   WebkitTextStrokeWidth: state.style.outline,
                   backgroundColor: state.style.backgroundColor,
+                  fontWeight: state.style.bold ? 'bold' : 'normal',
+                  fontStyle: state.style.italic ? 'italic' : 'normal',
+                  textDecoration: state.style.underline ? 'underline' : 'none',
                 }}
               >
                 { activeEvent.text }

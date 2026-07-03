@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from "react"
 import type { Transcript, Waveform, File, StyleOptions } from "../types/transcript";
 import { addTranscriptToDB, addWaveformToDB, getTranscriptFromDB, getWaveformFromDB } from "../utils/db";
@@ -14,7 +15,7 @@ type VideoAction =
   | { type: "UPDATE_FILENAME"; payload: { file: File } }
   | { type: "UPDATE_TRANSCRIPT_WAVEFORM"; 
       payload: { transcript: Transcript, waveform?: Waveform } }
-  | { type: "UPDATE_STYLES"; payoad : { style: StyleOptions } }
+  | { type: "UPDATE_STYLES"; payload : { style: StyleOptions } }
   | { type: "RESET" }
 
 const initialVideoState: VideoState = {
@@ -42,7 +43,7 @@ const videoReducer = (state: VideoState, action: VideoAction): VideoState => {
     case 'UPDATE_STYLES' : 
       return {
         ...state,
-        style: action.payoad.style
+        style: action.payload.style
       }
 
     case 'RESET' :

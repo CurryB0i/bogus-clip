@@ -1,7 +1,9 @@
 aiofiles==25.1.0
 fastapi==0.128.0
 ffmpeg-python==0.2.0
+fonttools==4.58.4
 librosa==0.11.0
+numpy==2.3.1
 python-dotenv==1.0.1
 python-multipart==0.0.21
 uvicorn==0.40.0

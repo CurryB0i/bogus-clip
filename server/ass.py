@@ -1,6 +1,6 @@
 import getpass
 from os import name
-from typing import List
+from typing import List, Optional
 from dataclasses import dataclass
 import re
 
@@ -106,6 +106,7 @@ class Event:
   marginV : int;
   effect  : str;
   text    : str;
+  pos     : Optional[tuple] = None;
 
 @dataclass
 class ASS:
@@ -118,21 +119,25 @@ def generateASSFileContent(ass: ASS) -> str:
   for style in ass.styles:
     styles_block += (
       "Style: "
-      f"{style.name},{style.fontName},{style.fontSize}"
-      f"{style.primaryColor},{style.secondaryColor},{style.outlineColor},{style.backgroundColor}"
-      f"{style.bold},{style.italic},{style.underline},{style.strikeOut}"
-      f"{style.scaleX},{style.scaleY},{style.spacing},{style.angle}"
-      f"{style.borderStyle},{style.outline},{style.shadow},{style.alignment}"
+      f"{style.name},{style.fontName},{style.fontSize},"
+      f"{style.primaryColor},{style.secondaryColor},{style.outlineColor},{style.backgroundColor},"
+      f"{style.bold},{style.italic},{style.underline},{style.strikeOut},"
+      f"{style.scaleX},{style.scaleY},{style.spacing},{style.angle},"
+      f"{style.borderStyle},{style.outline},{style.shadow},{style.alignment},"
       f"{style.marginL},{style.marginR},{style.marginV},{style.encoding}\n"
     )
 
   events_block = ""
   for event in ass.events:
+    override = ""
+    if event.pos:
+      override = f"\\pos({event.pos[0]},{event.pos[1]})"
+    text = f"{{{override}}}{event.text}" if override else event.text
     events_block += (
       f"{event.type}: "
-      f"{event.layer},{floatToASSTime(event.start)},{floatToASSTime(event.end)}"
-      f"{event.style},{event.name},{event.marginL}"
-      f"{event.marginR},{event.marginV},{event.effect},{event.text}\n"
+      f"{event.layer},{floatToASSTime(event.start)},{floatToASSTime(event.end)},"
+      f"{event.style.name},{event.name},{event.marginL},"
+      f"{event.marginR},{event.marginV},{event.effect},{text}\n"
     )
 
   ass_file_content = f'''
@@ -154,7 +159,7 @@ ScaledBorderAndShadow: {SCRIPT_INFO.scaledBorderAndShadow}
 
 [V4+ Styles]
 ; Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Segoe UI,45,&HFFB0B0,&HFFFF00,&H998877,0,0,2
+Style: Default,Segoe UI,45,&HFFB0B0,&HFFFF00,&H998877,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0
 {styles_block}
 
 [Events]
@@ -210,7 +215,7 @@ def parseASSFileContent(ass_file_content: str) -> ASS:
       )
     )
 
-  events_pattern = re.compile(r"^(?P<type>)\s*:(?P<event>.+)$", re.MULTILINE)
+  events_pattern = re.compile(r"^(?P<type>Dialogue|Comment)\s*:\s*(?P<event>.+)$", re.MULTILINE)
   matches = [(m.group('type'), m.group('event')) for m in events_pattern.finditer(ass_file_content)]
   events: List[Event] = []
   for m in matches:
@@ -233,4 +238,19 @@ def parseASSFileContent(ass_file_content: str) -> ASS:
       )
     )
 
-    return ASS(scriptInfo=SCRIPT_INFO, styles=styles, events=events)
+  return ASS(scriptInfo=SCRIPT_INFO, styles=styles, events=events)
+
+def hexToASSColor(hex_color: str) -> str:
+  hex_color = hex_color.lstrip("#")
+  if len(hex_color) == 8:
+    a = hex_color[6:8]
+    r = hex_color[0:2]
+    g = hex_color[2:4]
+    b = hex_color[4:6]
+    return f"&H{a}{b}{g}{r}"
+  elif len(hex_color) == 6:
+    r = hex_color[0:2]
+    g = hex_color[2:4]
+    b = hex_color[4:6]
+    return f"&H00{b}{g}{r}"
+  return "&H00FFFFFF"
