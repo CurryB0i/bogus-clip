@@ -45,17 +45,12 @@ A web application for generating, editing, and burning subtitles into videos wit
 
 ### Backend Setup
 
+**Windows (PowerShell):**
 ```bash
 cd server
 
-# Create virtual environment
-python -m venv venv
-venv\Scripts\activate  # Windows
-# or
-source venv/bin/activate  # Linux/Mac
-
-# Install dependencies
-pip install -r requirements.txt
+# Run the installation script
+.\install.ps1
 
 # Create .env file with your Hugging Face token
 echo "HF_TOKEN=your_huggingface_token_here" > .env
@@ -63,6 +58,31 @@ echo "HF_TOKEN=your_huggingface_token_here" > .env
 # Start server
 python server.py
 ```
+
+**Linux/Mac:**
+```bash
+cd server
+
+# Make script executable
+chmod +x install.sh
+
+# Run the installation script
+./install.sh
+
+# Create .env file with your Hugging Face token
+echo "HF_TOKEN=your_huggingface_token_here" > .env
+
+# Start server
+python server.py
+```
+
+The install scripts will:
+1. Upgrade pip toolchain
+2. Install base requirements (FastAPI, ffmpeg-python, etc.)
+3. Remove any incorrect torch versions installed by whisperx
+4. Detect NVIDIA GPU and install appropriate PyTorch version:
+   - **With GPU**: CUDA 12.1 enabled torch (2.5.1)
+   - **Without GPU**: CPU-only torch (2.5.1)
 
 ### Frontend Setup
 
