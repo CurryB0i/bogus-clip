@@ -203,7 +203,7 @@ MIT License - See LICENSE file for details
 
 ## Credits
 
-Developed by Digital Excellence Centre (DEC), Deloitte India
+Developed by someone for everyone
 
 ---
 
