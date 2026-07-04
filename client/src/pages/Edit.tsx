@@ -15,15 +15,13 @@ const Edit = () => {
   const navigate = useNavigate();
   const [page, setPage] = useState<Page>(() => {
     const saved = localStorage.getItem("edit-page");
-    return (saved === "captions" || saved === "styles") ? saved : "styles";
+    return saved === "captions" || saved === "styles" ? saved : "styles";
   });
 
   useEffect(() => {
-    if(!state.file)
-      navigate('/');
+    if (!state.file) navigate("/");
 
-    if(!state.transcript)
-      navigate('/transcribe');
+    if (!state.transcript) navigate("/transcribe");
   }, []);
 
   useEffect(() => {
@@ -31,17 +29,24 @@ const Edit = () => {
   }, [page]);
 
   const [burning, setBurning] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
 
   const handleExport = async () => {
     if (!state.file || !state.transcript) return;
     try {
-      const res = await axios.post("/export-ass", {
-        filename: state.file.name,
-        styles: state.transcript.styles,
-        events: state.transcript.events,
-        position: state.style?.position
-      }, { responseType: "blob" });
+      const res = await axios.post(
+        "/api/export-ass",
+        {
+          filename: state.file.name,
+          styles: state.transcript.styles,
+          events: state.transcript.events,
+          position: state.style?.position,
+        },
+        { responseType: "blob" },
+      );
 
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement("a");
@@ -62,22 +67,32 @@ const Edit = () => {
     if (!state.file || !state.transcript) return;
     setBurning(true);
     try {
-      const res = await axios.post("/burn-subtitles", {
-        filename: state.file.name,
-        styles: state.transcript.styles,
-        events: state.transcript.events,
-        position: state.style?.position
-      }, { responseType: "blob" });
+      const res = await axios.post(
+        "/api/burn-subtitles",
+        {
+          filename: state.file.name,
+          styles: state.transcript.styles,
+          events: state.transcript.events,
+          position: state.style?.position,
+        },
+        { responseType: "blob" },
+      );
 
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `${state.file.name.split(".")[0]}_burned.mp4`);
+      link.setAttribute(
+        "download",
+        `${state.file.name.split(".")[0]}_burned.mp4`,
+      );
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      setToast({ message: "Video with burnt subtitles downloaded!", type: "success" });
+      setToast({
+        message: "Video with burnt subtitles downloaded!",
+        type: "success",
+      });
     } catch (err) {
       console.error(err);
       setToast({ message: "Failed to burn subtitles", type: "error" });
@@ -86,10 +101,14 @@ const Edit = () => {
     }
   };
 
-  const steps: Array<{ id: number; label: string; status: 'pending' | 'current' | 'completed' | 'loading' }> = [
-    { id: 1, label: 'Upload', status: 'completed' },
-    { id: 2, label: 'Transcribe', status: 'completed' },
-    { id: 3, label: 'Edit', status: burning ? 'loading' : 'current' },
+  const steps: Array<{
+    id: number;
+    label: string;
+    status: "pending" | "current" | "completed" | "loading";
+  }> = [
+    { id: 1, label: "Upload", status: "completed" },
+    { id: 2, label: "Transcribe", status: "completed" },
+    { id: 3, label: "Edit", status: burning ? "loading" : "current" },
   ];
 
   return (
@@ -98,7 +117,7 @@ const Edit = () => {
       <div className="w-full h-[calc(100vh-4rem)]">
         <div className="w-full h-[10vh] flex items-center justify-center gap-2">
           <button
-            onClick={() => navigate('/transcribe')}
+            onClick={() => navigate("/transcribe")}
             className="absolute left-5 flex items-center gap-2 text-gray-400 hover:text-white transition-all"
           >
             <ArrowLeft size={20} />
@@ -135,9 +154,11 @@ const Edit = () => {
           <button
             className={`p-2 rounded-2xl text-center font-bold border-orange-500 border-2
               flex items-center gap-1
-              ${burning 
-                ? "bg-orange-500 text-white cursor-not-allowed" 
-                : "bg-white text-orange-500 cursor-pointer hover:bg-orange-500 hover:text-white"}`}
+              ${
+                burning
+                  ? "bg-orange-500 text-white cursor-not-allowed"
+                  : "bg-white text-orange-500 cursor-pointer hover:bg-orange-500 hover:text-white"
+              }`}
             onClick={handleBurn}
             disabled={burning}
           >

@@ -14,66 +14,71 @@ const INITIAL_STYLES: StyleOptions = {
   italic: false,
   underline: false,
   outline: 0,
-  position: { x: 0, y: 0 }
+  position: { x: 0, y: 0 },
 };
 
 const EditStyles = () => {
   const { state, dispatch } = useVideo();
-  const [fonts, setFonts]   = useState<string[]>([]);
+  const [fonts, setFonts] = useState<string[]>([]);
   const [filteredFonts, setFilteredFonts] = useState<string[]>([]);
   const [fontSearch, setFontSearch] = useState("");
-  const [style, setStyle]   = useState<StyleOptions>(() => {
+  const [style, setStyle] = useState<StyleOptions>(() => {
     const s = localStorage.getItem("style");
     return s ? JSON.parse(s) : INITIAL_STYLES;
   });
   const [history, setHistory] = useState<StyleOptions[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [applied, setApplied]       = useState<boolean>(false);
+  const [applied, setApplied] = useState<boolean>(false);
   const [showXGuide, setShowXGuide] = useState<boolean>(false);
   const [showYGuide, setShowYGuide] = useState<boolean>(false);
-  const [videoDisplaySize, setVideoDisplaySize] = useState<{width: number, height: number}>({width: 0, height: 0});
-  const [videoNaturalSize, setVideoNaturalSize] 
-                                    = useState<{ width: number, height: number }>({ width: 0, height: 0 });
-  const textRef         = useRef<HTMLDivElement>(null);
-  const videoRef        = useRef<HTMLVideoElement>(null);
-  const dragOffset      = useRef({ x: 0, y: 0 });
-  const SNAP_THRESHOLD  = 10;
+  const [videoDisplaySize, setVideoDisplaySize] = useState<{
+    width: number;
+    height: number;
+  }>({ width: 0, height: 0 });
+  const [videoNaturalSize, setVideoNaturalSize] = useState<{
+    width: number;
+    height: number;
+  }>({ width: 0, height: 0 });
+  const textRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const dragOffset = useRef({ x: 0, y: 0 });
+  const SNAP_THRESHOLD = 10;
 
   const displayToASS = (displayX: number, displayY: number) => {
-    if (!videoRef.current || !textRef.current || videoNaturalSize.width === 0) 
+    if (!videoRef.current || !textRef.current || videoNaturalSize.width === 0)
       return { x: 0, y: 0 };
-    
+
     const videoRect = videoRef.current.getBoundingClientRect();
     const textRect = textRef.current.getBoundingClientRect();
-    
+
     const scaleX = videoNaturalSize.width / videoRect.width;
     const scaleY = videoNaturalSize.height / videoRect.height;
-    
-    const centerX = displayX + (textRect.width / 2);
-    const centerY = displayY + (textRect.height / 2);
-    
+
+    const centerX = displayX + textRect.width / 2;
+    const centerY = displayY + textRect.height / 2;
+
     return {
       x: Math.round(centerX * scaleX),
-      y: Math.round(centerY * scaleY)
+      y: Math.round(centerY * scaleY),
     };
   };
 
   const assToDisplay = (assX: number, assY: number) => {
-    if (!videoRef.current || !textRef.current || videoNaturalSize.width === 0) 
+    if (!videoRef.current || !textRef.current || videoNaturalSize.width === 0)
       return { x: 0, y: 0 };
-    
+
     const videoRect = videoRef.current.getBoundingClientRect();
     const textRect = textRef.current.getBoundingClientRect();
-    
+
     const scaleX = videoRect.width / videoNaturalSize.width;
     const scaleY = videoRect.height / videoNaturalSize.height;
-    
+
     const displayCenterX = assX * scaleX;
     const displayCenterY = assY * scaleY;
-    
+
     return {
-      x: displayCenterX - (textRect.width / 2),
-      y: displayCenterY - (textRect.height / 2)
+      x: displayCenterX - textRect.width / 2,
+      y: displayCenterY - textRect.height / 2,
     };
   };
 
@@ -121,19 +126,19 @@ const EditStyles = () => {
 
     return { x: snappedX, y: snappedY };
   };
-  
+
   useEffect(() => {
     const getFonts = async () => {
       try {
-        const res = await axios.get(`/get-fonts`);
-        if(res.data.ok) {
+        const res = await axios.get(`/api/get-fonts`);
+        if (res.data.ok) {
           setFonts(res.data.fonts);
           setFilteredFonts(res.data.fonts);
         }
-      } catch(err) {
+      } catch (err) {
         console.error(err);
       }
-    }
+    };
 
     getFonts();
   }, []);
@@ -142,7 +147,9 @@ const EditStyles = () => {
     if (fontSearch.trim() === "") {
       setFilteredFonts(fonts);
     } else {
-      setFilteredFonts(fonts.filter(f => f.toLowerCase().includes(fontSearch.toLowerCase())));
+      setFilteredFonts(
+        fonts.filter((f) => f.toLowerCase().includes(fontSearch.toLowerCase())),
+      );
     }
   }, [fontSearch, fonts]);
 
@@ -159,7 +166,7 @@ const EditStyles = () => {
       const newIndex = historyIndex - 1;
       setHistoryIndex(newIndex);
       setStyle(history[newIndex]);
-      localStorage.setItem('style', JSON.stringify(history[newIndex]));
+      localStorage.setItem("style", JSON.stringify(history[newIndex]));
     }
   };
 
@@ -168,7 +175,7 @@ const EditStyles = () => {
       const newIndex = historyIndex + 1;
       setHistoryIndex(newIndex);
       setStyle(history[newIndex]);
-      localStorage.setItem('style', JSON.stringify(history[newIndex]));
+      localStorage.setItem("style", JSON.stringify(history[newIndex]));
     }
   };
 
@@ -179,17 +186,18 @@ const EditStyles = () => {
     const handleLoadedMetadata = () => {
       setVideoNaturalSize({
         width: video.videoWidth,
-        height: video.videoHeight
+        height: video.videoHeight,
       });
     };
 
     if (video.readyState >= 1) {
       handleLoadedMetadata();
     } else {
-      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      video.addEventListener("loadedmetadata", handleLoadedMetadata);
     }
 
-    return () => video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+    return () =>
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
   }, []);
 
   useEffect(() => {
@@ -208,7 +216,7 @@ const EditStyles = () => {
   }, []);
 
   const displayPosition = useMemo(() => {
-    if (videoNaturalSize.width === 0 || videoDisplaySize.width === 0) 
+    if (videoNaturalSize.width === 0 || videoDisplaySize.width === 0)
       return { x: 0, y: 0 };
 
     const scaleX = videoDisplaySize.width / videoNaturalSize.width;
@@ -219,9 +227,15 @@ const EditStyles = () => {
 
     return {
       x: displayCenterX - (textRef.current?.offsetWidth || 0) / 2,
-      y: displayCenterY - (textRef.current?.offsetHeight || 0) / 2
+      y: displayCenterY - (textRef.current?.offsetHeight || 0) / 2,
     };
-  }, [style.position, videoNaturalSize, videoDisplaySize, style.font, style.size]);
+  }, [
+    style.position,
+    videoNaturalSize,
+    videoDisplaySize,
+    style.font,
+    style.size,
+  ]);
 
   const onMouseDown = (e: React.MouseEvent) => {
     const displayPos = assToDisplay(style.position.x, style.position.y);
@@ -241,7 +255,7 @@ const EditStyles = () => {
 
     const snapped = snapPosition(rawX, rawY);
     const clamped = clampPosition(snapped.x, snapped.y);
-    
+
     const assPos = displayToASS(clamped.x, clamped.y);
     updateStyle("position", assPos);
   };
@@ -254,30 +268,30 @@ const EditStyles = () => {
   };
 
   const alphaToHex = (a: number) =>
-    Math.round(a * 255).toString(16).padStart(2, "0");
+    Math.round(a * 255)
+      .toString(16)
+      .padStart(2, "0");
 
   const hexToAlpha = (hex?: string) =>
-    hex && hex.length === 9
-      ? parseInt(hex.slice(7, 9), 16) / 255
-      : 1;
+    hex && hex.length === 9 ? parseInt(hex.slice(7, 9), 16) / 255 : 1;
 
   useEffect(() => {
-    if(!style?.font) return;
+    if (!style?.font) return;
 
     const isFontLoaded = (fontName: string) => {
       return [...document.fonts].some(
-        f => f.family.replace(/["']/g, "") === fontName
+        (f) => f.family.replace(/["']/g, "") === fontName,
       );
-    }
+    };
 
     const loadFont = async (fontName: string) => {
-      const font = new FontFace( 
-                    fontName, 
-                    `url(/font/${encodeURIComponent(fontName)})`
-                   );
+      const font = new FontFace(
+        fontName,
+        `url(/font/${encodeURIComponent(fontName)})`,
+      );
       await font.load();
       document.fonts.add(font);
-    }
+    };
 
     const ensureFont = async () => {
       if (!isFontLoaded(style.font)) {
@@ -288,42 +302,44 @@ const EditStyles = () => {
     ensureFont();
   }, [style?.font]);
 
-  const updateStyle = (field: keyof StyleOptions, raw: string | boolean | StyleOptions['position']) => {
+  const updateStyle = (
+    field: keyof StyleOptions,
+    raw: string | boolean | StyleOptions["position"],
+  ) => {
     let value;
-    if(field === "size" || field === "outline") {
+    if (field === "size" || field === "outline") {
       value = Number((raw as string).replace(/\D+/g, ""));
-    } else if(field == "position") {
-      value = { 
-        x: Number((raw as StyleOptions['position']).x.toFixed(2)),
-        y: Number((raw as StyleOptions['position']).y.toFixed(2)) 
-      }
+    } else if (field == "position") {
+      value = {
+        x: Number((raw as StyleOptions["position"]).x.toFixed(2)),
+        y: Number((raw as StyleOptions["position"]).y.toFixed(2)),
+      };
     } else {
       value = raw;
     }
 
     const newStyle = {
       ...style!,
-      [field] : value
+      [field]: value,
     };
     setStyle(newStyle);
     addToHistory(newStyle);
-  }
+  };
 
   const handleApply = () => {
     setApplied(true);
-    if(!style) return;
+    if (!style) return;
 
     dispatch({
-      type: 'UPDATE_STYLES',
-      payload: { style }
+      type: "UPDATE_STYLES",
+      payload: { style },
     });
     addToHistory(style);
-    localStorage.setItem('style', JSON.stringify(style));
-    setTimeout(() => setApplied(false), 1000)
-  }
+    localStorage.setItem("style", JSON.stringify(style));
+    setTimeout(() => setApplied(false), 1000);
+  };
 
-  useEffect(() => console.log(applied), [applied])
-
+  useEffect(() => console.log(applied), [applied]);
 
   return (
     <div className="w-full h-full flex items-center justify-around">
@@ -333,9 +349,11 @@ const EditStyles = () => {
             onClick={handleUndo}
             disabled={historyIndex <= 0}
             className={`px-3 py-1 rounded font-bold transition-all
-              ${historyIndex > 0 
-                ? "bg-blue-500 text-white hover:bg-blue-600" 
-                : "bg-gray-700 text-gray-500 cursor-not-allowed"}`}
+              ${
+                historyIndex > 0
+                  ? "bg-blue-500 text-white hover:bg-blue-600"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+              }`}
             title="Undo (Ctrl+Z)"
           >
             Undo
@@ -344,9 +362,11 @@ const EditStyles = () => {
             onClick={handleRedo}
             disabled={historyIndex >= history.length - 1}
             className={`px-3 py-1 rounded font-bold transition-all
-              ${historyIndex < history.length - 1
-                ? "bg-blue-500 text-white hover:bg-blue-600" 
-                : "bg-gray-700 text-gray-500 cursor-not-allowed"}`}
+              ${
+                historyIndex < history.length - 1
+                  ? "bg-blue-500 text-white hover:bg-blue-600"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+              }`}
             title="Redo (Ctrl+Shift+Z)"
           >
             Redo
@@ -370,11 +390,7 @@ const EditStyles = () => {
               className="bg-[#242424] p-1 text-center cursor-pointer max-h-40 overflow-y-auto"
             >
               {filteredFonts.map((f) => (
-                <option 
-                  key={f} 
-                  value={f}
-                  className="text-black cursor-pointer"
-                >
+                <option key={f} value={f} className="cursor-pointer">
                   {f}
                 </option>
               ))}
@@ -384,7 +400,7 @@ const EditStyles = () => {
 
         <div className="w-full flex items-center justify-between gap-5">
           <label htmlFor="size">FONT SIZE</label>
-          <input 
+          <input
             id="size"
             name="size"
             type="text"
@@ -421,7 +437,7 @@ const EditStyles = () => {
                 const alphaHex = alphaToHex(Number(e.target.value));
                 updateStyle(
                   "primaryColor",
-                  `${style!.primaryColor.slice(0, 7)}${alphaHex}`
+                  `${style!.primaryColor.slice(0, 7)}${alphaHex}`,
                 );
               }}
               className="w-1/4"
@@ -454,7 +470,7 @@ const EditStyles = () => {
                 const alphaHex = alphaToHex(Number(e.target.value));
                 updateStyle(
                   "secondaryColor",
-                  `${style!.secondaryColor.slice(0, 7)}${alphaHex}`
+                  `${style!.secondaryColor.slice(0, 7)}${alphaHex}`,
                 );
               }}
               className="w-1/4"
@@ -487,7 +503,7 @@ const EditStyles = () => {
                 const alphaHex = alphaToHex(Number(e.target.value));
                 updateStyle(
                   "outlineColor",
-                  `${style!.outlineColor.slice(0, 7)}${alphaHex}`
+                  `${style!.outlineColor.slice(0, 7)}${alphaHex}`,
                 );
               }}
               className="w-1/4"
@@ -520,7 +536,7 @@ const EditStyles = () => {
                 const alphaHex = alphaToHex(Number(e.target.value));
                 updateStyle(
                   "backgroundColor",
-                  `${style!.backgroundColor.slice(0, 7)}${alphaHex}`
+                  `${style!.backgroundColor.slice(0, 7)}${alphaHex}`,
                 );
               }}
               className="w-1/4"
@@ -530,7 +546,7 @@ const EditStyles = () => {
 
         <div className="w-full flex items-center justify-between gap-5">
           <label htmlFor="outline">OUTLINE</label>
-          <input 
+          <input
             id="outline"
             name="outline"
             type="text"
@@ -545,17 +561,17 @@ const EditStyles = () => {
         <div className="w-full flex items-center justify-around">
           <div className="flex gap-2">
             <label htmlFor="x">X</label>
-            <input 
+            <input
               id="x"
               name="x"
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
               value={style?.position.x}
-              onChange={e =>
+              onChange={(e) =>
                 updateStyle("position", {
                   x: Number(e.target.value.replace(/\D+/g, "")),
-                  y: style!.position.y
+                  y: style!.position.y,
                 })
               }
               className="bg-[#242424] p-1 w-2/3 text-center"
@@ -563,17 +579,17 @@ const EditStyles = () => {
           </div>
           <div className="flex gap-2">
             <label htmlFor="y">Y</label>
-            <input 
+            <input
               id="y"
               name="y"
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
               value={style?.position.y}
-              onChange={e =>
+              onChange={(e) =>
                 updateStyle("position", {
-                  y: Number(e.target.value.replace(/\D+/g, "")), 
-                  x: style!.position.x
+                  y: Number(e.target.value.replace(/\D+/g, "")),
+                  x: style!.position.x,
                 })
               }
               className="bg-[#242424] p-1 w-2/3 text-center"
@@ -581,28 +597,28 @@ const EditStyles = () => {
           </div>
         </div>
 
-        <div className={`bg-white p-2 rounded-xl text-black hover:scale-110 transition-all font-bold 
-          ${applied ? 'cursor-not-allowed bg-blue-500' : 'cursor-pointer hover:bg-blue-500'}`}
+        <div
+          className={`bg-white p-2 rounded-xl text-black hover:scale-110 transition-all font-bold 
+          ${applied ? "cursor-not-allowed bg-blue-500" : "cursor-pointer hover:bg-blue-500"}`}
           onClick={handleApply}
         >
-          { applied ? 'APPLIED' : 'APPLY' }
+          {applied ? "APPLIED" : "APPLY"}
         </div>
       </div>
 
       <div className="w-1/2 h-full flex items-center justify-center text-center">
-        {
-          style && style.position && (
-            <div className="w-1/2 relative">
-              <video 
-                className="w-full mx-auto"
-                 src={`/videos/${state.file?.name}`}
-                ref={videoRef}
-              />
-              {videoNaturalSize.width > 0 && (
-                <>
-                  <div
-                    ref={textRef}
-                    className="absolute cursor-move select-none top-0 left-0"
+        {style && style.position && (
+          <div className="w-1/2 relative">
+            <video
+              className="w-full mx-auto"
+              src={`/api/videos/${state.file?.name}`}
+              ref={videoRef}
+            />
+            {videoNaturalSize.width > 0 && (
+              <>
+                <div
+                  ref={textRef}
+                  className="absolute cursor-move select-none top-0 left-0"
                   style={{
                     transform: `translate(
                       ${displayPosition.x}px,
@@ -614,30 +630,29 @@ const EditStyles = () => {
                     WebkitTextStrokeColor: style.outlineColor,
                     WebkitTextStrokeWidth: style.outline,
                     backgroundColor: style.backgroundColor,
-                    fontWeight: style.bold ? 'bold' : 'normal',
-                    fontStyle: style.italic ? 'italic' : 'normal',
-                    textDecoration: style.underline ? 'underline' : 'none',
+                    fontWeight: style.bold ? "bold" : "normal",
+                    fontStyle: style.italic ? "italic" : "normal",
+                    textDecoration: style.underline ? "underline" : "none",
                   }}
-                    onMouseDown={onMouseDown}
-                  >
-                    HELLO, WORLD!
-                  </div>
+                  onMouseDown={onMouseDown}
+                >
+                  HELLO, WORLD!
+                </div>
 
-                  {showXGuide && (
-                    <div className="absolute top-0 left-1/2 w-px h-full bg-red-500" />
-                  )}
+                {showXGuide && (
+                  <div className="absolute top-0 left-1/2 w-px h-full bg-red-500" />
+                )}
 
-                  {showYGuide && (
-                    <div className="absolute left-0 top-1/2 h-px w-full bg-red-500" />
-                  )}
-                </>
-              )}
-            </div>
-          )
-        }
+                {showYGuide && (
+                  <div className="absolute left-0 top-1/2 h-px w-full bg-red-500" />
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
-}
+};
 
 export default EditStyles;

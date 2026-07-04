@@ -9,3 +9,4 @@ server/audios
 server/videos
 server/transcripts
 server/waveforms
+server/burned

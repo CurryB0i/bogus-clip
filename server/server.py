@@ -21,6 +21,7 @@ import librosa
 from fontTools.ttLib import TTFont
 import platform
 import subprocess
+import traceback
 
 load_dotenv()
 
@@ -52,17 +53,36 @@ WAVEFORM_DIR.mkdir(exist_ok=True)
 app.mount("/videos", StaticFiles(directory=VIDEO_DIR), name="videos")
 app.mount("/audios", StaticFiles(directory=AUDIO_DIR), name="audios")
 
-device = "cuda"
-compute_type = "float16"
+device = None
+compute_type = None
 batch_size = 8
 num = 10000
 hf_token = os.getenv("HF_TOKEN")
-model = whisperx.load_model("base", device, compute_type=compute_type)
-model_a, metadata = whisperx.load_align_model(language_code="en", device=device)
-diarize_model = DiarizationPipeline(
-  use_auth_token=hf_token,
-  device=device
-)
+model = None
+model_a = None
+metadata = None
+diarize_model = None
+
+
+def get_runtime_config():
+  if torch.cuda.is_available():
+    return "cuda", "float16"
+  return "cpu", "int8"
+
+
+def get_transcription_components():
+  global device, compute_type, model, model_a, metadata, diarize_model
+
+  if model is None or model_a is None or metadata is None or diarize_model is None:
+    device, compute_type = get_runtime_config()
+    model = whisperx.load_model("base", device, compute_type=compute_type)
+    model_a, metadata = whisperx.load_align_model(language_code="en", device=device)
+    diarize_model = DiarizationPipeline(
+      use_auth_token=hf_token,
+      device=device
+    )
+
+  return device, compute_type
 
 DEFAULT_STYLES = {
   "default": {
@@ -170,8 +190,15 @@ async def transcribe(req: TranscribeRequest):
       "sampleRate": int(sr)
     }
 
+    try:
+      runtime_device, runtime_compute_type = get_transcription_components()
+    except Exception as exc:
+      print("Failed to initialize transcription models:", exc)
+      traceback.print_exc()
+      raise HTTPException(status_code=500, detail=f"Failed to initialize transcription models: {exc}")
+
     result = model.transcribe(audio_path, batch_size=batch_size)
-    result = whisperx.align(result["segments"], model_a, metadata, audio_path, device, return_char_alignments=False)
+    result = whisperx.align(result["segments"], model_a, metadata, audio_path, runtime_device, return_char_alignments=False)
     diarize_segments = diarize_model(audio_path)
     result = whisperx.assign_word_speakers(diarize_segments, result)
 
@@ -238,7 +265,8 @@ async def transcribe(req: TranscribeRequest):
 
   except Exception as e:
     print(e)
-    raise HTTPException(status_code=500, detail="Internal Server Error (Probably CUDA ran out of memory)")
+    traceback.print_exc()
+    raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
 
 @app.get('/get_transcript_waveform/{filename}')
 async def get_transcript(filename: str):
